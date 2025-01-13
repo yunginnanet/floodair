@@ -1,0 +1,24 @@
+---
+soapy_sdr: "hackrf=0,bias_tx=0,if_gain=47,multiply_const=6"
+
+ ## FloodAir Type
+    # 1 = constant frequency
+    # 2 = frequency sweeping
+    # 3 = random frequency hopping
+hopper: 3
+
+ ## Waveform
+    # 1 = single tone
+    # 2 = QPSK (Quadra Phase Key Shift Keying) modulated waveform
+    # 3 = gaussian noise (*)
+waveform: 2
+
+## Hop Time (s)
+hop_time: 0.001
+
+## Power
+power: 47
+
+freq_delta: 1
+freq_center: 2000
+freq_max: 3000
