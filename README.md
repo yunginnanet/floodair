@@ -51,6 +51,6 @@ hop_time: 0.001
 power: 47
 
 freq_delta: 1
-freq_center: 2000
+freq_min: 2000
 freq_max: 3000
 ```

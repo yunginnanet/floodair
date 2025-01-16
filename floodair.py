@@ -16,6 +16,7 @@ except:
 
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
 
+
 class FloodAir:
     def __init__(self, options):
         super(FloodAir, self).__init__()
@@ -56,7 +57,7 @@ class FloodAir:
         try:
             f = self.sink.get_center_freq()
         except:
-            f = self.options.get("freq_center") * 10e5
+            f = self.options.get("freq_min") * 10e5
         return f
 
     def print_freq(self):
@@ -110,7 +111,7 @@ class FloodAir:
         print(f"soapy:\t{soapy_string}")
 
         try:
-            import osmosdr # noinspection PyUnresolvedReferences
+            import osmosdr  # noinspection PyUnresolvedReferences
         except ImportError:
             print("Error: osmosdr module not found")
             exit(1)
@@ -142,14 +143,26 @@ class FloodAir:
 
     def flood_run(self):
         self.tb.start()
-        time.sleep(self.hop_time)
+        if self.options.get("hopper") == 1:
+            input("enter to stop\n\n")
+        else:
+            time.sleep(self.options.get("hop_time"))
         self.tb.stop()
         self.tb.wait()
 
     def flood(self, freq):
-        self.flood_setup(freq)
+        try:
+            self.flood_setup(freq)
+        except Exception as e:
+            print(e)
+            return e
+
         self.print_freq()
-        self.flood_run()
+        try:
+            self.flood_run()
+        except Exception as e:
+            print(e)
+            return e
 
     def set_frequency(self, init_freq, channel):
         if channel == 1:
@@ -160,8 +173,11 @@ class FloodAir:
         return freq
 
     def constant(self):
-        freq = self.options.get("freq_center") * 10e5
-        self.flood(freq)
+        try:
+            self.flood(self.options.get("freq_min"))
+        except Exception as e:
+            print(e)
+            os.exit(1)
         time.sleep(self.options.get("hop_time"))
 
     def sweeping(self, init_freq, lst_freq):
@@ -173,19 +189,32 @@ class FloodAir:
                 channel = 1
             freq = self.set_frequency(init_freq, channel)
             time.sleep(self.options.get("hop_time"))
-            self.flood(freq)
+
+            try:
+                self.flood(freq)
+            except Exception as e:
+                print(e)
+                self.setup_once = False
+                time.sleep(0.01)
+
             channel += 1
 
     def hopping(self, init_freq, lst_freq):
         freq_range = (round(lst_freq) - round(init_freq)) // (
-                self.options.get("freq_delta") * 10e5
+            self.options.get("freq_delta") * 10e5
         )
         channel = 1
 
         while True:
             freq = self.set_frequency(init_freq, channel)
             time.sleep(self.options.get("hop_time"))
-            self.flood(freq)
+            try:
+                self.flood(freq)
+            except Exception as e:
+                print(e)
+                self.setup_once = False
+                time.sleep(0.01)
+
             channel = int(randint(1, round(freq_range + 1)))
 
 
@@ -196,6 +225,8 @@ def_opts = {
     "hop_time": 0.01,
     "waveform": 3,
     "hopper": 3,
+    "freq_min": 2400,
+    "freq_max": 2500,
 }
 
 
@@ -203,7 +234,7 @@ def prompt_freqs(options):
     while True:
         _f = input("enter minimum center frequency in MHz: ")
         try:
-            options["freq_center"] = float(_f)
+            options["freq_min"] = float(_f)
             break
         except:
             continue
@@ -221,12 +252,12 @@ def prompt_freqs(options):
     except:
         pprint(options)
 
-    print("\nusing default values", end='', flush=True)
+    print("\nusing default values", end="", flush=True)
     for i in range(1, 4):
         time.sleep(1)
-        end = ''
+        end = ""
         if i == 4:
-            end = '\n\n'
+            end = "\n\n"
         print(".", end=end, flush=True)
 
     return options
@@ -252,7 +283,7 @@ def arg_parser():
         "--freq_min",
         help="min center frequency in MHz",
         type=float,
-        default=def_opts.get("freq_center"),
+        default=def_opts.get("freq_min"),
     )
     ap.add_argument(
         "-m",
@@ -291,6 +322,7 @@ def arg_parser():
     )
     return ap.parse_args()
 
+
 # write function to merge config file and command line args, prioritizing command line args
 def merge_options(options, arg_vars):
     for key, value in arg_vars.items():
@@ -299,6 +331,7 @@ def merge_options(options, arg_vars):
         if value is not None and value != def_opts[key]:
             options[key] = value
     return options
+
 
 def load_config():
     args = arg_parser()
@@ -328,14 +361,14 @@ def main():
 
     wavy = FloodAir(options)
 
-    freq = options.get("freq_center") * 10e5
-    freq_max = (options.get("freq_max") * 10e5)
+    freq = options.get("freq_min") * 10e5
+    freq_max = options.get("freq_max") * 10e5
 
     if freq_max < freq:
-        print("freq_max must be greater than freq_center")
+        print("freq_max must be greater than freq_min")
         exit(1)
 
-    options["freq_center"] = freq
+    options["freq_min"] = freq
 
     hopper_mechanism = options.get("hopper")
 
