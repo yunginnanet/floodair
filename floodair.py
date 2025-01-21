@@ -2,7 +2,7 @@
 
 import argparse
 import time
-from random import randint
+from random import randint, uniform
 import yaml
 
 from gnuradio import gr, blocks, analog, digital
@@ -24,6 +24,9 @@ class FloodAir:
         self.waveform = options.get("waveform")
         self.power = options.get("power")
         self.hop_time = options.get("hop_time")
+        self.hop_entropy = options.get("hop_entropy")
+        self.hop_entropy_min = options.get("hop_entropy_min")
+        self.hop_entropy_max = options.get("hop_entropy_max")
         self.RF_gain = None
         self.IF_gain = None
         self.sink = None
@@ -62,6 +65,16 @@ class FloodAir:
 
     def print_freq(self):
         print(f"\nLet it eat: {self.get_freq() / 10e5}MHz")
+
+    def _hop_wait(self):
+        if self.hop_entropy == False:
+            time.sleep(self.hop_time)
+            return
+
+        _wait = uniform(self.hop_entropy_min, self.hop_entropy_max)
+        print(_wait, flush=True, end="")
+        print("s...", flush=True, end="")
+        time.sleep(_wait)
 
     def _waveform(self):
         throttle = blocks.throttle(gr.sizeof_gr_complex * 1, self.sample_rate, True)
@@ -146,7 +159,7 @@ class FloodAir:
         if self.options.get("hopper") == 1:
             input("enter to stop\n\n")
         else:
-            time.sleep(self.options.get("hop_time"))
+            self._hop_wait()
         self.tb.stop()
         self.tb.wait()
 
@@ -162,6 +175,7 @@ class FloodAir:
             self.flood_run()
         except Exception as e:
             print(e)
+            time.sleep(0.5)
             return e
 
     def set_frequency(self, init_freq, channel):
@@ -177,8 +191,7 @@ class FloodAir:
             self.flood(self.options.get("freq_min"))
         except Exception as e:
             print(e)
-            os.exit(1)
-        time.sleep(self.options.get("hop_time"))
+            exit(1)
 
     def sweeping(self, init_freq, lst_freq):
         channel = 1
@@ -188,14 +201,13 @@ class FloodAir:
             if channel > n_channels:
                 channel = 1
             freq = self.set_frequency(init_freq, channel)
-            time.sleep(self.options.get("hop_time"))
 
             try:
                 self.flood(freq)
             except Exception as e:
                 print(e)
                 self.setup_once = False
-                time.sleep(0.01)
+                time.sleep(0.001)
 
             channel += 1
 
@@ -207,13 +219,12 @@ class FloodAir:
 
         while True:
             freq = self.set_frequency(init_freq, channel)
-            time.sleep(self.options.get("hop_time"))
             try:
                 self.flood(freq)
             except Exception as e:
                 print(e)
                 self.setup_once = False
-                time.sleep(0.01)
+                time.sleep(0.001)
 
             channel = int(randint(1, round(freq_range + 1)))
 
@@ -227,6 +238,9 @@ def_opts = {
     "hopper": 3,
     "freq_min": 2400,
     "freq_max": 2500,
+    "hop_entropy": False,
+    "hop_entropy_min": 0.001,
+    "hop_entropy_max": 20,
 }
 
 
@@ -320,10 +334,30 @@ def arg_parser():
         type=int,
         default=def_opts.get("hopper"),
     )
+    ap.add_argument(
+        "-e",
+        "--hop_entropy",
+        help="enable random hop_time values",
+        type=bool,
+        default=def_opts.get("hop_entropy"),
+    )
+    ap.add_argument(
+        "-l",
+        "--hop_entropy_min",
+        help="minimum ([l]ower) value for random hop_time values",
+        type=int,
+        default=def_opts.get("hop_entropy_min"),
+    )
+    ap.add_argument(
+        "-u",
+        "--hop_entropy_max",
+        help="maximum ([u]pper) value for random hop_time values",
+        type=int,
+        default=def_opts.get("hop_entropy_max"),
+    )
     return ap.parse_args()
 
 
-# write function to merge config file and command line args, prioritizing command line args
 def merge_options(options, arg_vars):
     for key, value in arg_vars.items():
         if key == "config":
