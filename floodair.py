@@ -21,12 +21,15 @@ class FloodAir:
     def __init__(self, options):
         super(FloodAir, self).__init__()
         self.options = options
-        self.waveform = options.get("waveform")
-        self.power = options.get("power")
-        self.hop_time = options.get("hop_time")
-        self.hop_entropy = options.get("hop_entropy")
-        self.hop_entropy_min = options.get("hop_entropy_min")
-        self.hop_entropy_max = options.get("hop_entropy_max")
+
+        self.signal_type = options.get("signal_type")
+        self.signal_power = options.get("signal_power")
+
+        self.hopper_entropy = False
+        self.hopper_delay_static = options.get("hopper_delay_static")
+        self.hopper_delay_min = options.get("hopper_delay_min")
+        self.hopper_delay_max = options.get("hopper_delay_max")
+
         self.RF_gain = None
         self.IF_gain = None
         self.sink = None
@@ -37,41 +40,41 @@ class FloodAir:
         self.setup_once = False
 
     def set_gains(self):
-        if -40 <= self.power <= 5:
+        if -40 <= self.signal_power <= 5:
             self.RF_gain = 0
-            if self.power < -5:
-                self.IF_gain = self.power + 40
-            elif -5 <= self.power <= 2:
-                self.IF_gain = self.power + 41
-            elif 2 < self.power <= 5:
-                self.IF_gain = self.power + 42
-        elif self.power > 5:
+            if self.signal_power < -5:
+                self.IF_gain = self.signal_power + 40
+            elif -5 <= self.signal_power <= 2:
+                self.IF_gain = self.signal_power + 41
+            elif 2 < self.signal_power <= 5:
+                self.IF_gain = self.signal_power + 42
+        elif self.signal_power > 5:
             self.RF_gain = 14
-            self.IF_gain = self.power + 34
+            self.IF_gain = self.signal_power + 34
         return self.RF_gain, self.IF_gain
 
+    # noinspection TryExceptPass
     def set_freq(self, freq):
         try:
             self.sink.set_center_freq(freq, 0)
-        except:
-            pass
+        except: pass
 
     def get_freq(self):
         try:
             f = self.sink.get_center_freq()
         except:
-            f = self.options.get("freq_min") * 10e5
+            f = self.options.get("frequency_start") * 10e5
         return f
 
     def print_freq(self):
         print(f"\nLet it eat: {self.get_freq() / 10e5}MHz")
 
     def _hop_wait(self):
-        if self.hop_entropy == False:
-            time.sleep(self.hop_time)
+        if self.hopper_entropy:
+            time.sleep(self.hopper_delay_static)
             return
 
-        _wait = uniform(self.hop_entropy_min, self.hop_entropy_max)
+        _wait = uniform(self.hopper_delay_min, self.hopper_delay_max)
         print(_wait, flush=True, end="")
         print("s...", flush=True, end="")
         time.sleep(_wait)
@@ -79,16 +82,20 @@ class FloodAir:
     def _waveform(self):
         throttle = blocks.throttle(gr.sizeof_gr_complex * 1, self.sample_rate, True)
 
-        match self.waveform:
+        match self.signal_type:
             case 1:
-                print("waveform:\tsine")
+                print("signal_type:\tsine")
                 self.source = analog.sig_source_c(
                     self.sample_rate, analog.GR_SIN_WAVE, 1000, 1, 0, 0
                 )
                 self.tb.connect(self.source, throttle)
                 self.tb.connect(throttle, self.sink)
             case 2:
-                print("waveform:\tQPSK")
+                # avoid buffer underruns
+                self.sample_rate=10e6
+                self.sink.set_sample_rate(self.sample_rate)
+
+                print("signal_type:\tQPSK")
                 qpsk = digital.generic_mod(
                     constellation=digital.constellation_rect(
                         [-1 - 1j, -1 + 1j, 1 + 1j, 1 - 1j], [0, 1, 3, 2], 4, 2, 2, 1, 1
@@ -106,7 +113,7 @@ class FloodAir:
                 self.tb.connect(qpsk, throttle, self.sink)
 
             case 3:
-                print("waveform:\tnoise")
+                print("signal_type:\tnoise")
                 self.source = analog.noise_source_c(
                     analog.GR_GAUSSIAN, 1.0, randint(11111, 55555)
                 )
@@ -115,7 +122,7 @@ class FloodAir:
 
     def _sink(self, freq):
         try:
-            soapy_string = self.options.get("soapy_sdr")
+            soapy_string = self.options.get("device_soapy_str")
             if soapy_string is None:
                 raise Exception
         except:
@@ -125,8 +132,9 @@ class FloodAir:
 
         try:
             import osmosdr  # noinspection PyUnresolvedReferences
-        except ImportError:
-            print("Error: osmosdr module not found")
+        except ImportError as e:
+            print("Error: osmosdr module not found", e)
+            osmosdr = None
             exit(1)
 
         self.sink = osmosdr.sink(args=soapy_string)
@@ -145,6 +153,7 @@ class FloodAir:
         self.set_freq(freq)
 
         if self.setup_once is True:
+            #self._waveform()
             return
 
         self.setup_once = True
@@ -156,7 +165,7 @@ class FloodAir:
 
     def flood_run(self):
         self.tb.start()
-        if self.options.get("hopper") == 1:
+        if self.options.get("hopper_mode") == 1:
             input("enter to stop\n\n")
         else:
             self._hop_wait()
@@ -182,20 +191,20 @@ class FloodAir:
         if channel == 1:
             freq = init_freq
         else:
-            freq = init_freq + (channel - 1) * (self.options.get("freq_delta") * 10e5)
+            freq = init_freq + (channel - 1) * (self.options.get("frequency_delta") * 10e5)
 
         return freq
 
     def constant(self):
         try:
-            self.flood(self.options.get("freq_min"))
+            self.flood(self.options.get("frequency_start"))
         except Exception as e:
             print(e)
             exit(1)
 
     def sweeping(self, init_freq, lst_freq):
         channel = 1
-        n_channels = (lst_freq - init_freq) // (self.options.get("freq_delta") * 10e5)
+        n_channels = (lst_freq - init_freq) // (self.options.get("frequency_delta") * 10e5)
 
         while True:
             if channel > n_channels:
@@ -204,16 +213,15 @@ class FloodAir:
 
             try:
                 self.flood(freq)
+                channel += 1
             except Exception as e:
                 print(e)
                 self.setup_once = False
                 time.sleep(0.001)
 
-            channel += 1
-
-    def hopping(self, init_freq, lst_freq):
+    def hopper(self, init_freq, lst_freq):
         freq_range = (round(lst_freq) - round(init_freq)) // (
-            self.options.get("freq_delta") * 10e5
+            self.options.get("frequency_delta") * 10e5
         )
         channel = 1
 
@@ -230,36 +238,37 @@ class FloodAir:
 
 
 def_opts = {
-    "soapy_sdr": "hackrf=0,bias_tx=0,if_gain=47,multiply_const=6",
-    "freq_delta": 1,
-    "power": 47,
-    "hop_time": 0.01,
-    "waveform": 3,
-    "hopper": 3,
-    "freq_min": 2400,
-    "freq_max": 2500,
-    "hop_entropy": False,
-    "hop_entropy_min": 0.001,
-    "hop_entropy_max": 20,
+    "device_soapy_str": "hackrf=0,bias_tx=0,if_gain=47,multiply_const=6",
+
+    "signal_power": 47,
+    "signal_type": 3,
+
+    "frequency_delta": 1,
+    "frequency_min": 2400,
+    "frequency_max": 2500,
+
+    "hopper_mode": 3,
+    "hopper_delay_static": 0.01,
+    "hopper_delay_min": 0.001,
+    "hopper_delay_max": 20,
 }
 
 
+# noinspection TryExceptPass
 def prompt_freqs(options):
     while True:
         _f = input("enter minimum center frequency in MHz: ")
         try:
-            options["freq_min"] = float(_f)
+            options["frequency_start"] = float(_f)
             break
-        except:
-            continue
+        except: pass
 
     while True:
         _f = input("enter end center frequency in MHz: ")
         try:
-            options["freq_max"] = float(_f)
+            options["frequency_end"] = float(_f)
             break
-        except:
-            continue
+        except: pass
 
     try:
         cpprint(options)
@@ -287,73 +296,68 @@ def arg_parser():
     )
     ap.add_argument(
         "-d",
-        "--soapy_sdr",
+        "--device_soapy_str",
         help="soapysdr device string",
         type=str,
-        default=def_opts.get("soapy_sdr"),
+        default=def_opts.get("device_soapy_str"),
     )
     ap.add_argument(
         "-f",
-        "--freq_min",
+        "--frequency_start",
         help="min center frequency in MHz",
         type=float,
-        default=def_opts.get("freq_min"),
+        default=def_opts.get("frequency_start"),
     )
     ap.add_argument(
         "-m",
-        "--freq-max",
+        "--frequency-end",
         help="max center frequency in MHz",
         type=float,
-        default=def_opts.get("freq_max"),
+        default=def_opts.get("frequency_end"),
     )
     ap.add_argument(
         "-p",
-        "--power",
-        help="RF power in dB",
+        "--signal_power",
+        help="RF signal_power in dB",
         type=int,
-        default=def_opts.get("power"),
-    )
-    ap.add_argument(
-        "-t",
-        "--hop_time",
-        help="time to stay on each frequency hopped to",
-        type=float,
-        default=def_opts.get("hop_time"),
+        default=def_opts.get("signal_power"),
     )
     ap.add_argument(
         "-w",
-        "--waveform",
-        help="source waveform",
+        "--signal_type",
+        help="source signal_type",
         type=int,
-        default=def_opts.get("waveform"),
+        default=def_opts.get("signal_type"),
+        choices=[1, 2, 3],
     )
     ap.add_argument(
         "-o",
-        "--hopper",
+        "--hopper_mode",
         help="channel hopping mechanism",
-        type=int,
-        default=def_opts.get("hopper"),
+        type=float,
+        default=def_opts.get("hopper_mode"),
+        choices=[1, 2, 3, 3.1],
     )
     ap.add_argument(
-        "-e",
-        "--hop_entropy",
-        help="enable random hop_time values",
-        type=bool,
-        default=def_opts.get("hop_entropy"),
+        "-t",
+        "--hopper_delay_static",
+        help="time to stay on each frequency hopped to",
+        type=float,
+        default=def_opts.get("hopper_delay_static"),
     )
     ap.add_argument(
         "-l",
-        "--hop_entropy_min",
-        help="minimum ([l]ower) value for random hop_time values",
+        "--hopper_delay_min",
+        help="minimum ([l]ower) value for random hopper_delay_static values",
         type=int,
-        default=def_opts.get("hop_entropy_min"),
+        default=def_opts.get("hopper_delay_min"),
     )
     ap.add_argument(
         "-u",
-        "--hop_entropy_max",
-        help="maximum ([u]pper) value for random hop_time values",
+        "--hopper_delay_max",
+        help="maximum ([u]pper) value for random hopper_delay_static values",
         type=int,
-        default=def_opts.get("hop_entropy_max"),
+        default=def_opts.get("hopper_delay_max"),
     )
     return ap.parse_args()
 
@@ -372,13 +376,13 @@ def load_config():
 
     try:
         config_file = open(args.config, "r")
-        options = yaml.load(config_file, Loader=yaml.FullLoader)
+        options = yaml.safe_load(config_file)
         config_file.close()
 
     except Exception as e:
         print(f"failed to load config ({args.config})\n{e}\n")
         options = def_opts
-        options = prompt_freqs(def_opts)
+        options = prompt_freqs(options)
 
     options = merge_options(options, vars(args))
 
@@ -395,16 +399,16 @@ def main():
 
     wavy = FloodAir(options)
 
-    freq = options.get("freq_min") * 10e5
-    freq_max = options.get("freq_max") * 10e5
+    freq = options.get("frequency_start") * 10e5
+    freq_max = options.get("frequency_end") * 10e5
 
     if freq_max < freq:
-        print("freq_max must be greater than freq_min")
+        print("frequency_end must be greater than frequency_start")
         exit(1)
 
-    options["freq_min"] = freq
+    options["frequency_start"] = freq
 
-    hopper_mechanism = options.get("hopper")
+    hopper_mechanism = options.get("hopper_mode")
 
     match hopper_mechanism:
         case 1:
@@ -412,13 +416,18 @@ def main():
         case 2:
             wavy.sweeping(freq, freq_max)
         case 3:
-            wavy.hopping(freq, freq_max)
+            wavy.hopper_entropy = False
+            wavy.hopper(freq, freq_max)
+        case 3.1:
+            wavy.hopper_entropy = True
+            wavy.hopper(freq, freq_max)
         case _:
             print(
-                "unknown hopper mechanism. options:\n",
+                "unknown 'hopper_mode'. options:\n",
                 "1\tconstant\n",
                 "2\tsweeping\n",
-                "3\thopping",
+                "3\thopper\n",
+                "3.1\thopper with entropy\n",
             )
             exit(1)
 
