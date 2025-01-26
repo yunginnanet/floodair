@@ -70,7 +70,7 @@ class FloodAir:
         print(f"\nLet it eat: {self.get_freq() / 10e5}MHz")
 
     def _hop_wait(self):
-        if self.hopper_entropy:
+        if not self.hopper_entropy:
             time.sleep(self.hopper_delay_static)
             return
 
@@ -283,6 +283,7 @@ def prompt_freqs(options):
             end = "\n\n"
         print(".", end=end, flush=True)
 
+
     return options
 
 
@@ -412,8 +413,10 @@ def main():
 
     match hopper_mechanism:
         case 1:
+            wavy.hopper_entropy = False
             wavy.constant()
         case 2:
+            wavy.hopper_entropy = False
             wavy.sweeping(freq, freq_max)
         case 3:
             wavy.hopper_entropy = False

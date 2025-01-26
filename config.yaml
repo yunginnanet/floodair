@@ -28,11 +28,11 @@ signal_power: 47
  # 1 = constant frequency
  # 2 = frequency sweeping
  # 3 = random frequency hopping
-   # 3.1 = random frequency hopping with entropy
+  # 3.1 = random frequency hopping with entropy
 hopper_mode: 2
 
 # (seconds) time to wait before hopping to the next frequency
-hopper_delay_static: 5
+hopper_delay_static: 20
 
 hopper_delay_min: 1
 hopper_delay_max: 10

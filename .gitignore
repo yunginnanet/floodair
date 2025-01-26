@@ -2,3 +2,4 @@
 config.tmp
 config.alt
 config.9*
+*.save
