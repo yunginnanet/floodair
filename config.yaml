@@ -14,7 +14,7 @@ device_soapy_str: "hackrf=0,bias_tx=1,if_gain=47,multiply_const=6,buffers=64"
   # 1 = single tone
   # 2 = QPSK (Quadra Phase Key Shift Keying) modulated signal_type
   # 3 = gaussian noise (*)
-signal_type: 2
+signal_type: 3
 
 # Note: consider removing this parameter
 # in favor of parameters within device_soapy_str.
@@ -25,26 +25,44 @@ signal_power: 47
   #####   Hopper   #####
   ######################
 
- # 1 = constant frequency
- # 2 = frequency sweeping
- # 3 = random frequency hopping
-  # 3.1 = random frequency hopping with entropy
-hopper_mode: 2
+ # - 1        constant frequency
+ # - 2        frequency sweeping
+ # - 3        random frequency hopping
+ #   - 3.1            \--> (with entropic delay)
+ # - 4        ranger function string (see below)
+ #   - 4.1            \--> (with entropic delay)
+hopper_mode: 3.1
 
 # (seconds) time to wait before hopping to the next frequency
 hopper_delay_static: 20
 
-hopper_delay_min: 1
-hopper_delay_max: 10
+hopper_delay_min: 0.01
+hopper_delay_max: 0.1
 
+# comma separated items;
+#    - freq:                            single frequency (%f)
+#    - freqmin-freqmax:                 frequency range (%f-%f)
+#    - freqmin-freqmax_delta:           frequency range with step (%f-%f_%f)
+#    - freqmin-freqmax_delta;delaysecs: frequency range with step and delay (%f-%f_%f;%f)
+#    - r:freqmin-freqmax_delta:         random frequency range with step (%f-%f_%f)
+#
+# Examples:
+#    - "2400"                             # 2400Mhz
+#    - "2400-2500"                        # 2400-2500Mhz sweep
+#    - "2400-2500_1"                      # 2400-2500Mhz sweep with 1Mhz step
+#    - "r:2400-2500_1"                    # random frequency between 2400-2500Mhz with 1Mhz step
+#    - "2400,r:2400-2500_1, 2500"         # 2400Mhz, random frequency between 2400-2500Mhz with 1Mhz step, then 2500Mhz
+#    - "2400-2500_1;0.1, 2500-2600_1;0.2" # 2400-2500Mhz sweep with 1Mhz step and 0.1s delay, then 2500-2600Mhz sweep with 1Mhz step and 0.2s delay
+
+ranger_str: "r:3850-4075_1;0.1,910-925_1;0.2,r:1300-1700_1;0.2,2350;5"
 
   #####################
   ##### Frequency #####
   #####################
 
-frequency_delta: 5
-frequency_start: 905
-frequency_end: 930
+frequency_delta: 0.1
+frequency_start: 910
+frequency_end: 925
 
 
 

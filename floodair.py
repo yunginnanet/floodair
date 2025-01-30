@@ -3,10 +3,12 @@
 import argparse
 import time
 from random import randint, uniform
-import yaml
 
-from gnuradio import gr, blocks, analog, digital
 import numpy as np
+import yaml
+from gnuradio import gr, blocks, analog, digital
+
+import ranger
 
 try:
     from prettyprinter import cpprint
@@ -15,6 +17,7 @@ except:
 
 
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
+
 
 
 class FloodAir:
@@ -57,7 +60,8 @@ class FloodAir:
     def set_freq(self, freq):
         try:
             self.sink.set_center_freq(freq, 0)
-        except: pass
+        except:
+            pass
 
     def get_freq(self):
         try:
@@ -92,7 +96,7 @@ class FloodAir:
                 self.tb.connect(throttle, self.sink)
             case 2:
                 # avoid buffer underruns
-                self.sample_rate=10e6
+                self.sample_rate = 10e6
                 self.sink.set_sample_rate(self.sample_rate)
 
                 print("signal_type:\tQPSK")
@@ -153,7 +157,7 @@ class FloodAir:
         self.set_freq(freq)
 
         if self.setup_once is True:
-            #self._waveform()
+            # self._waveform()
             return
 
         self.setup_once = True
@@ -221,7 +225,7 @@ class FloodAir:
 
     def hopper(self, init_freq, lst_freq):
         freq_range = (round(lst_freq) - round(init_freq)) // (
-            self.options.get("frequency_delta") * 10e5
+                self.options.get("frequency_delta") * 10e5
         )
         channel = 1
 
@@ -236,6 +240,26 @@ class FloodAir:
 
             channel = int(randint(1, round(freq_range + 1)))
 
+    def rangin(self, iterable):
+        while True:
+            started = False
+            for freq in iterable:
+                freq = freq * 10e5
+                try:
+                    if started:
+                        self.tb.stop()
+                        self.tb.wait()
+
+                    self.flood_setup(freq)
+                    self.print_freq()
+                    self.tb.start()
+                except Exception as e:
+                    print(e)
+                    self.setup_once = False
+                    time.sleep(0.001)
+
+                finally:
+                    started = True
 
 def_opts = {
     "device_soapy_str": "hackrf=0,bias_tx=0,if_gain=47,multiply_const=6",
@@ -244,13 +268,15 @@ def_opts = {
     "signal_type": 3,
 
     "frequency_delta": 1,
-    "frequency_min": 2400,
-    "frequency_max": 2500,
+    "frequency_start": 2400,
+    "frequency_end": 2500,
 
     "hopper_mode": 3,
     "hopper_delay_static": 0.01,
     "hopper_delay_min": 0.001,
     "hopper_delay_max": 20,
+
+    "ranger_str": "1600,2300,r:2400-2500_1",
 }
 
 
@@ -261,14 +287,16 @@ def prompt_freqs(options):
         try:
             options["frequency_start"] = float(_f)
             break
-        except: pass
+        except:
+            pass
 
     while True:
         _f = input("enter end center frequency in MHz: ")
         try:
             options["frequency_end"] = float(_f)
             break
-        except: pass
+        except:
+            pass
 
     try:
         cpprint(options)
@@ -282,7 +310,6 @@ def prompt_freqs(options):
         if i == 4:
             end = "\n\n"
         print(".", end=end, flush=True)
-
 
     return options
 
@@ -337,7 +364,7 @@ def arg_parser():
         help="channel hopping mechanism",
         type=float,
         default=def_opts.get("hopper_mode"),
-        choices=[1, 2, 3, 3.1],
+        choices=[1, 2, 3, 3.1, 4, 4.1],
     )
     ap.add_argument(
         "-t",
@@ -350,15 +377,22 @@ def arg_parser():
         "-l",
         "--hopper_delay_min",
         help="minimum ([l]ower) value for random hopper_delay_static values",
-        type=int,
+        type=float,
         default=def_opts.get("hopper_delay_min"),
     )
     ap.add_argument(
         "-u",
         "--hopper_delay_max",
         help="maximum ([u]pper) value for random hopper_delay_static values",
-        type=int,
+        type=float,
         default=def_opts.get("hopper_delay_max"),
+    )
+    ap.add_argument(
+        "-r",
+        "--ranger_str",
+        help="comma separated range values for ranger function, see config for more help",
+        type=str,
+        default=def_opts.get("ranger_str"),
     )
     return ap.parse_args()
 
@@ -424,6 +458,11 @@ def main():
         case 3.1:
             wavy.hopper_entropy = True
             wavy.hopper(freq, freq_max)
+        case 4:
+            wavy.rangin(ranger.Ranger(options.get("ranger_str")))
+        case 4.1:
+            wavy.hopper_entropy = True
+            wavy.rangin(ranger.Ranger(options.get("ranger_str")))
         case _:
             print(
                 "unknown 'hopper_mode'. options:\n",
