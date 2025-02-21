@@ -19,7 +19,6 @@ except:
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
 
 
-
 class FloodAir:
     def __init__(self, options):
         super(FloodAir, self).__init__()
@@ -74,11 +73,11 @@ class FloodAir:
         print(f"\nLet it eat: {self.get_freq() / 10e5}MHz")
 
     def _hop_wait(self):
-        if not self.hopper_entropy:
-            time.sleep(self.hopper_delay_static)
+        _wait = self.hopper_delay_static
+        if self.hopper_entropy:
+            _wait = uniform(self.hopper_delay_min, self.hopper_delay_max)
             return
 
-        _wait = uniform(self.hopper_delay_min, self.hopper_delay_max)
         print(_wait, flush=True, end="")
         print("s...", flush=True, end="")
         time.sleep(_wait)
@@ -173,8 +172,12 @@ class FloodAir:
             input("enter to stop\n\n")
         else:
             self._hop_wait()
-        self.tb.stop()
-        self.tb.wait()
+        try:
+            self.tb.stop()
+        except Exception as e:
+            raise e
+        finally:
+            self.tb.wait()
 
     def flood(self, freq):
         try:
@@ -188,14 +191,15 @@ class FloodAir:
             self.flood_run()
         except Exception as e:
             print(e)
-            time.sleep(0.5)
             return e
 
     def set_frequency(self, init_freq, channel):
         if channel == 1:
             freq = init_freq
         else:
-            freq = init_freq + (channel - 1) * (self.options.get("frequency_delta") * 10e5)
+            freq = init_freq + (channel - 1) * (
+                self.options.get("frequency_delta") * 10e5
+            )
 
         return freq
 
@@ -208,7 +212,9 @@ class FloodAir:
 
     def sweeping(self, init_freq, lst_freq):
         channel = 1
-        n_channels = (lst_freq - init_freq) // (self.options.get("frequency_delta") * 10e5)
+        n_channels = (lst_freq - init_freq) // (
+            self.options.get("frequency_delta") * 10e5
+        )
 
         while True:
             if channel > n_channels:
@@ -225,7 +231,7 @@ class FloodAir:
 
     def hopper(self, init_freq, lst_freq):
         freq_range = (round(lst_freq) - round(init_freq)) // (
-                self.options.get("frequency_delta") * 10e5
+            self.options.get("frequency_delta") * 10e5
         )
         channel = 1
 
@@ -241,8 +247,8 @@ class FloodAir:
             channel = int(randint(1, round(freq_range + 1)))
 
     def rangin(self, iterable):
+        started = False
         while True:
-            started = False
             for freq in iterable:
                 freq = freq * 10e5
                 try:
@@ -253,29 +259,23 @@ class FloodAir:
                     self.flood_setup(freq)
                     self.print_freq()
                     self.tb.start()
+                    started = True
                 except Exception as e:
                     print(e)
                     self.setup_once = False
-                    time.sleep(0.001)
 
-                finally:
-                    started = True
 
 def_opts = {
     "device_soapy_str": "hackrf=0,bias_tx=0,if_gain=47,multiply_const=6",
-
     "signal_power": 47,
     "signal_type": 3,
-
     "frequency_delta": 1,
     "frequency_start": 2400,
     "frequency_end": 2500,
-
     "hopper_mode": 3,
     "hopper_delay_static": 0.01,
     "hopper_delay_min": 0.001,
     "hopper_delay_max": 20,
-
     "ranger_str": "1600,2300,r:2400-2500_1",
 }
 
@@ -459,10 +459,21 @@ def main():
             wavy.hopper_entropy = True
             wavy.hopper(freq, freq_max)
         case 4:
-            wavy.rangin(ranger.Ranger(options.get("ranger_str")))
+            wavy.rangin(
+                ranger.Ranger(
+                    options.get("ranger_str"),
+                    sleep_secs=options.get("hopper_delay_static"),
+                )
+            )
         case 4.1:
             wavy.hopper_entropy = True
-            wavy.rangin(ranger.Ranger(options.get("ranger_str")))
+            wavy.rangin(
+                ranger.Ranger(
+                    options.get("ranger_str"),
+                    sleep_secs=options.get("hopper_delay_static"),
+                    entropy = True
+                )
+            )
         case _:
             print(
                 "unknown 'hopper_mode'. options:\n",

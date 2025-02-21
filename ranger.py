@@ -1,6 +1,7 @@
 from enum import Enum
-from random import uniform
+from random import uniform, shuffle
 import time
+
 
 class RangeMode(Enum):
     ONE = 0
@@ -18,7 +19,15 @@ class RangeMode(Enum):
 
 class Range:
     # noinspection PySameParameterValue
-    def __init__(self, rstart=1.0, rend=None, delta=None, rmode=RangeMode.SEQUENCE, maxiter=None, sleep_secs=0.0):
+    def __init__(
+        self,
+        rstart=1.0,
+        rend=None,
+        delta=None,
+        rmode=RangeMode.SEQUENCE,
+        maxiter=None,
+        sleep_secs=0.0,
+    ):
         self.mode = rmode
         self._delay = sleep_secs
         self._start = float(rstart)
@@ -51,9 +60,9 @@ class Range:
         if not maxiter:
             match self.mode:
                 case RangeMode.RANDOM:
-                    self.maxiter = int((self._end - self._start) / self._delta)+1
+                    self.maxiter = int((self._end - self._start) / self._delta) + 1
                 case RangeMode.SEQUENCE:
-                    self.maxiter = int((self._end - self._start) / self._delta)+1
+                    self.maxiter = int((self._end - self._start) / self._delta) + 1
                 case RangeMode.STATIC:
                     raise Exception("maxiter required for static mode")
                 case RangeMode.ONE:
@@ -107,6 +116,7 @@ class Range:
         except Exception as e:
             raise e
         finally:
+            # print(f"{self._delay}s")
             time.sleep(self._delay)
 
     def spin(self):
@@ -143,21 +153,29 @@ class Range:
 
 
 class Ranger:
-    def __init__(self, ranges="900-935_0.1,r:3850-4075_10;1", maxiter=None, sleep_secs=0.0):
+    def __init__(
+        self,
+        ranges="900-935_0.1,r:3850-4075_10;1",
+        maxiter=None,
+        sleep_secs=0.0,
+        entropy=False,
+    ):
         self.ranges = []
         self._ranges = ranges
         self._rindex = 0
         self._delay = sleep_secs
+        self._random = entropy
 
         for r in ranges.split(","):
             delta = 0.1
             rmode = RangeMode.SEQUENCE
 
-            _delay = self._delay
+            if self._random:
+                rmode = RangeMode.RANDOM
 
             if ";" in r:
                 r, sleep_time = r.split(";")
-                _delay = float(sleep_time)
+                self._delay = float(sleep_time)
 
             if "r:" in r:
                 r = r.replace("r:", "")
@@ -181,10 +199,19 @@ class Ranger:
                 rstart = float(start)
                 rend = float(end)
 
-                self.ranges.append(Range(rstart, rend, delta, rmode, maxiter, _delay))
-
+                self.ranges.append(
+                    Range(rstart, rend, delta, rmode, maxiter, self._delay)
+                )
             else:
-                self.ranges.append(Range(rstart=float(r), rend=float(r), rmode=RangeMode.ONE, maxiter=1))
+                self.ranges.append(
+                    Range(
+                        rstart=float(r),
+                        rend=float(r),
+                        rmode=RangeMode.ONE,
+                        maxiter=1,
+                        sleep_secs=self._delay,
+                    )
+                )
 
         for r in self.ranges:
             if not r:
@@ -214,6 +241,8 @@ class Ranger:
             n = self.ranges[self._rindex].next()
         except StopIteration:
             self.ranges[self._rindex].reset()
+            if self._random:
+                shuffle(self.ranges)
             self._rindex += 1
             n = self.__next__()
 
