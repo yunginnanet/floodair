@@ -264,6 +264,10 @@ class FloodAir:
                     print(e)
                     self.setup_once = False
 
+            self.tb.stop()
+            self.tb.wait()
+            started = False
+
 
 def_opts = {
     "device_soapy_str": "hackrf=0,bias_tx=0,if_gain=47,multiply_const=6",
@@ -471,7 +475,7 @@ def main():
                 ranger.Ranger(
                     options.get("ranger_str"),
                     sleep_secs=options.get("hopper_delay_static"),
-                    entropy = True
+                    entropy=True,
                 )
             )
         case _:
