@@ -14,6 +14,7 @@ try:
     from prettyprinter import cpprint
 except:
     from pprint import pprint
+import osmosdr  # noinspection PyUnresolvedReferences
 
 
 # -~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-~-
@@ -70,7 +71,7 @@ class FloodAir:
         return f
 
     def print_freq(self):
-        print(f"\nLet it eat: {self.get_freq() / 10e5}MHz")
+        print(f"Let it eat: {self.get_freq() / 10e5}MHz\r")
 
     def _hop_wait(self):
         _wait = self.hopper_delay_static
@@ -83,6 +84,9 @@ class FloodAir:
         time.sleep(_wait)
 
     def _waveform(self):
+        if self.source:
+            return
+
         throttle = blocks.throttle(gr.sizeof_gr_complex * 1, self.sample_rate, True)
 
         match self.signal_type:
@@ -94,8 +98,6 @@ class FloodAir:
                 self.tb.connect(self.source, throttle)
                 self.tb.connect(throttle, self.sink)
             case 2:
-                # avoid buffer underruns
-                self.sample_rate = 10e6
                 self.sink.set_sample_rate(self.sample_rate)
 
                 print("signal_type:\tQPSK")
@@ -126,21 +128,17 @@ class FloodAir:
     def _sink(self, freq):
         try:
             soapy_string = self.options.get("device_soapy_str")
-            if soapy_string is None:
-                raise Exception
         except:
             soapy_string = "hackrf=0,bias_tx=0,if_gain=47,multiply_const=6"
 
         print(f"soapy:\t{soapy_string}")
 
-        try:
-            import osmosdr  # noinspection PyUnresolvedReferences
-        except ImportError as e:
-            print("Error: osmosdr module not found", e)
-            osmosdr = None
-            exit(1)
-
-        self.sink = osmosdr.sink(args=soapy_string)
+        if not self.sink:
+            try:
+                self.sink = osmosdr.sink(args=soapy_string)
+            except Exception as e:
+                print(e)
+                exit(1)
 
         self.sink.set_time_unknown_pps(osmosdr.time_spec_t())
         self.sink.set_sample_rate(self.sample_rate)
@@ -156,7 +154,7 @@ class FloodAir:
         self.set_freq(freq)
 
         if self.setup_once is True:
-            # self._waveform()
+            self._waveform()
             return
 
         self.setup_once = True
