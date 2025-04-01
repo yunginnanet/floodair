@@ -77,7 +77,6 @@ class FloodAir:
         _wait = self.hopper_delay_static
         if self.hopper_entropy:
             _wait = uniform(self.hopper_delay_min, self.hopper_delay_max)
-            return
 
         print(_wait, flush=True, end="")
         print("s...", flush=True, end="")
