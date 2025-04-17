@@ -71,15 +71,15 @@ class FloodAir:
         return f
 
     def print_freq(self):
-        print(f"Let it eat: {self.get_freq() / 10e5}MHz\r")
+        print(f"\r\t\t\t\t\t\tLet it eat: {self.get_freq() / 10e5}MHz\t", end='')
 
     def _hop_wait(self):
         _wait = self.hopper_delay_static
         if self.hopper_entropy:
             _wait = uniform(self.hopper_delay_min, self.hopper_delay_max)
 
-        print(_wait, flush=True, end="")
-        print("s...", flush=True, end="")
+        print("\n\r", _wait, flush=True, end="")
+        print("s...", flush=True, end="\r")
         time.sleep(_wait)
 
     def _waveform(self):
@@ -395,6 +395,14 @@ def arg_parser():
         type=str,
         default=def_opts.get("ranger_str"),
     )
+    ap.add_argument(
+        "-e",
+        "--frequency_delta",
+        help="difference between frequencies during frequency hopping",
+        type=float,
+        default=def_opts.get("frequency_delta"),
+    )
+
     return ap.parse_args()
 
 
