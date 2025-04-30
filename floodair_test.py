@@ -70,9 +70,9 @@ class TestRange(unittest.TestCase):
 
     def test_range_iterable(self):
         r = ranger.Range(1, 55, 0.1, ranger.RangeMode.STATIC, 100)
-        ct=0
+        ct = 0
         for i in r:
-            ct+=1
+            ct += 1
             self.assertEqual(1, i)
 
         if ct != 100:
@@ -80,7 +80,7 @@ class TestRange(unittest.TestCase):
 
 
 class TestRanger(unittest.TestCase):
-   def test_ranger_iterable(self):
+    def test_ranger_iterable(self):
         r = ranger.Ranger("1-10_0.5,5,0.r:1-1.0")
 
         for _ in range(0, 30):
@@ -93,5 +93,6 @@ class TestRanger(unittest.TestCase):
             if ct != 30:
                 self.fail("Expected 30 iterations, got %d" % ct)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     unittest.main()

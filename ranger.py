@@ -27,10 +27,12 @@ class Range:
         rmode=RangeMode.SEQUENCE,
         maxiter=None,
         sleep_secs=0.0,
+        cold=True,
     ):
         self.mode = rmode
         self._delay = sleep_secs
         self._start = float(rstart)
+        self.cold = True
 
         if rend and rstart > rend:
             self._start, rend = rend, rstart
@@ -116,8 +118,10 @@ class Range:
         except Exception as e:
             raise e
         finally:
-            # print(f"{self._delay}s")
-            time.sleep(self._delay)
+            if self.cold == False:
+                time.sleep(self._delay)
+            else:
+                self.cold = False
 
     def spin(self):
         try:

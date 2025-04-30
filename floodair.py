@@ -41,6 +41,7 @@ class FloodAir:
         self.sample_rate = 20e6
         self.bandwidth = 20e6
         self.setup_once = False
+        self.hopper_mode = 3.0
 
     def set_gains(self):
         if -40 <= self.signal_power <= 5:
@@ -71,9 +72,11 @@ class FloodAir:
         return f
 
     def print_freq(self):
-        print(f"\r\t\t\t\t\t\tLet it eat: {self.get_freq() / 10e5}MHz\t", end='')
+        print(f"\r\t\t\t\t\t\tLet it eat: {self.get_freq() / 10e5}MHz\t", end="")
 
     def _hop_wait(self):
+        if self.hopper_mode > 3.2:
+            return
         _wait = self.hopper_delay_static
         if self.hopper_entropy:
             _wait = uniform(self.hopper_delay_min, self.hopper_delay_max)
@@ -452,9 +455,9 @@ def main():
 
     options["frequency_start"] = freq
 
-    hopper_mechanism = options.get("hopper_mode")
+    wavy.hopper_mode = options.get("hopper_mode")
 
-    match hopper_mechanism:
+    match wavy.hopper_mode:
         case 1:
             wavy.hopper_entropy = False
             wavy.constant()
